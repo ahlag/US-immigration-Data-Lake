@@ -32,7 +32,8 @@ A sample of Airflow architecture
 ![Airflow Architecture](images/airflow.png)
 
 
-![What is Spark](https://databricks.com/spark/about)
+[What is Spark](https://databricks.com/spark/about)
+
 A sample of Spark architecture
 ![Spark Architecture](images/spark_cluster.png)
 
