@@ -54,7 +54,7 @@ The project follows the follow steps:
 * Step 5: Complete Project Write Up
 
 ### Notebook
-Please check the [US_Immigration_Data_Lake.ipynb](US_Immigration_Data_Lake.ipynb)
+Please check the [US_Immigration_Data_Lake.ipynb](US_Immigration_Data_Lake.ipynb) for the project workflow.
 
 
 ### Configuration
