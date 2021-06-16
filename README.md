@@ -52,3 +52,22 @@ The project follows the follow steps:
 * Step 3: Define the Data Model
 * Step 4: Run ETL to Model the Data
 * Step 5: Complete Project Write Up
+
+### Notebook
+Please check the [US_Immigration_Data_Lake.ipynb](US_Immigration_Data_Lake.ipynb)
+
+
+### Configuration
+Set up a config file dl.cfg that uses the following schema. Put in the information for your IAM-Role that can read and write S3 buckets.
+```
+[S3]
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+```
+
+### ETL pipeline
+Simply run the ETL script.
+```
+python etl.py
+```
+If the ETL pipeline was successful, a preview of the output data will be displayed.
