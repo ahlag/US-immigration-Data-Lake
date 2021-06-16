@@ -20,7 +20,7 @@ The whole solution is cloud based on top of **Amazon Web Services (AWS)**. First
 
 ### Data Model
 
-![Architecture](images/data_model.png)
+![Data Model](images/data_model.png)
 
 ### Scalability
 
@@ -28,7 +28,13 @@ Since this system is built on Spark and Airflow it is very much horizontally sca
 
 [Benefits of Airflow](https://www.xenonstack.com/insights/apache-airflow/)
 
-[What is Spark](https://databricks.com/spark/about)
+A sample of Airflow architecture
+![Airflow Architecture](images/airflow.png)
+
+
+![What is Spark](https://databricks.com/spark/about)
+A sample of Spark architecture
+![Spark Architecture](images/spark_cluster.png)
 
 ### Structure of the Project
 
