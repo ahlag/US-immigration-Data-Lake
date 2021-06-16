@@ -26,16 +26,19 @@ The whole solution is cloud based on top of **Amazon Web Services (AWS)**. First
 
 Since this system is built on Spark and Airflow it is very much horizontally scalable. Airflow can handle the processing of millions of records.
 
-[Benefits of Airflow](https://www.xenonstack.com/insights/apache-airflow/)
+#### Airflow
 
 A sample of Airflow architecture
 ![Airflow Architecture](images/airflow.png)
 
+[Benefits of Airflow](https://www.xenonstack.com/insights/apache-airflow/)
 
-[What is Spark](https://databricks.com/spark/about)
+#### Spark
 
 A sample of Spark architecture
 ![Spark Architecture](images/spark_cluster.png)
+
+[What is Spark](https://databricks.com/spark/about)
 
 ### Structure of the Project
 
