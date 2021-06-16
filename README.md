@@ -2,7 +2,9 @@
 
 ### Data Engineering Capstone Project
 
-### Goal: To support U.S Customs & Border Protection Department to make better decisions on Immigration Policies
+#### Goal: To support U.S Customs & Border Protection Department to make better decisions on Immigration Policies
+
+***
 
 ### Business Problem
 
