@@ -14,9 +14,12 @@ The U.S. Customs and Border Protection needs help to see what is hidden behind t
 
 The whole solution is cloud based on top of **Amazon Web Services (AWS)**. First, all the datasets were preprocessed with **Apache Spark** and stored in a staging area in **AWS S3 bucket**. Then, it is loaded into a **Amazon Redshift** cluster using an **Apache Airflow** pipeline that transfers and checks the quality of the data to finally provide the department a Data Lake for their convenient analysis.
 
+![Architecture](images/architecture.png)
+
 ### Data Model
 
-![Architecture](images/architecture.png)
+![Architecture](images/data_model.png)
+
 
 ### Structure of the Project
 
