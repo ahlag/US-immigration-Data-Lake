@@ -10,6 +10,14 @@ A business consulting firm specialized in data warehouse services through assist
 
 The U.S. Customs and Border Protection needs help to see what is hidden behind the data flood. As more and more immigrants move to the US, people want quick and reliable ways to access certain information that can help inform their immigration, such as weather of the destination, demographics of destination. And for regulators to keep track of immigrants and their immigration meta data such as visa type, visa expire date, entry method to the US. The consulting firm aim to model and create a brand new analytics solution on top of the state-of-the-art technolgies available to enable department to unleash insights from data then making better decisions on immigration policies for those who came and will be coming in near future to the US.
 
+### Architecture
+
+The whole solution is cloud based on top of **Amazon Web Services (AWS)**. First, all the datasets were preprocessed with **Apache Spark** and stored in a staging area in **AWS S3 bucket**. Then, it is loaded into a **Amazon Redshift** cluster using an **Apache Airflow** pipeline that transfers and checks the quality of the data to finally provide the department a Data Lake for their convenient analysis.
+
+### Data Model
+
+![Architecture](images/architecture.png)
+
 ### Structure of the Project
 
 The project follows the follow steps:
