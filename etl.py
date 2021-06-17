@@ -185,9 +185,9 @@ def process_immigration_data(spark, input_data, output_data):
      # Convert SAS date to a meaningful string date in the format of YYYY-MM-DD
     immigration = convert_sas_date(immigration, date_cols)
     
-#     # Drop high null columns and not useful columns
-#     immigration = immigration.drop(*high_null)
-#     immigration = immigration.drop(*not_useful_cols)
+    # Drop high null columns and not useful columns
+    immigration = immigration.drop(*high_null)
+    immigration = immigration.drop(*not_useful_cols)
     
     immigration.show(10)
 
