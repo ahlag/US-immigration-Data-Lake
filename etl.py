@@ -4,7 +4,7 @@ import configparser
 from datetime import timedelta, datetime
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import udf, col, when, lower, isnull, year, month, dayofmonth, hour, weekofyear, dayofweek, date_format, to_date
-from pyspark.sql.types import StructField, StructType, IntegerType, DoubleType, LongType, DateType, StringType
+from pyspark.sql.types import IntegerType, DoubleType, LongType, DateType, StringType
 
 os.environ["JAVA_HOME"] = "/usr/lib/jvm/java-8-openjdk-amd64"
 os.environ["PATH"] = "/opt/conda/bin:/opt/spark-2.4.3-bin-hadoop2.7/bin:/opt/conda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/lib/jvm/java-8-openjdk-amd64/bin"
@@ -69,6 +69,49 @@ def convert_sas_udf(sas_date, date_format="%Y-%m-%d"):
         return sas_date
     else:
         return (timedelta(days=sas_date) + datetime(1960, 1, 1)).strftime(date_format)
+    
+@udf(IntegerType())
+def date_diff_udf(date1, date2, date_format="%Y-%m-%d"):
+    '''
+    Description: This fucntion calculates the difference in days between two dates
+    
+    Parameters:
+            date1: First date
+            date2: Second date
+            date_format: Date format. default: %Y-%m-%d
+    '''
+    
+    if date1 is None or date2 is None:
+        return None
+
+    return (datetime.strptime(date2, date_format) - datetime.strptime(date1, date_format)).days
+
+def change_field_value_condition(df, change_list):
+    '''
+    Description: Rename column values given a list.
+    
+    Parameters:
+        df           : Spark dataframe to be processed.
+        change_list  : List of tuples in the format (field, old value, new value)
+    '''
+    for field, old, new in change_list:
+        df = df.withColumn(field, when(df[field] == old, new).otherwise(df[field]))
+    return df
+
+@udf(StringType())
+def capitalize_udf(cap):
+    '''
+    Description: Capitalize string
+    
+    Parameters:
+        cap           : Spark dataframe to be processed.
+    '''
+    
+    if cap is None:
+        return cap
+    else:
+        return cap.title()
+
 
 def process_demographics_data(spark, input_data, output_data):
     """
@@ -85,7 +128,7 @@ def process_demographics_data(spark, input_data, output_data):
         input_data = "us-cities-demographics.csv"
         
     # Read US Cities Demo dataset file
-    demographics=spark.read.csv(input_data, sep=';', header=True)
+    demographics = spark.read.csv(input_data, sep=';', header=True)
     
     # Convert numeric columns to the proper types: Integer and Double
     int_cols = ['Count', 'Male Population', 'Female Population', 'Total Population', 'Number of Veterans', 'Foreign-born']
@@ -94,34 +137,34 @@ def process_demographics_data(spark, input_data, output_data):
     demographics = cast_type(demographics, dict(zip(float_cols, len(float_cols)*[DoubleType()])))
     
     first_agg = {
-                    "Median Age": "first", 
-                    "Male Population": "first", 
-                    "Female Population": "first", 
-                    "Total Population": "first", 
-                    "Number of Veterans": "first", 
-                    "Foreign-born": "first", 
-                    "Average Household Size": "first"
+                    "Median Age"             :       "first", 
+                    "Male Population"        :       "first", 
+                    "Female Population"      :       "first", 
+                    "Total Population"       :       "first", 
+                    "Number of Veterans"     :       "first", 
+                    "Foreign-born"           :       "first", 
+                    "Average Household Size" :       "first"
                 }
 
     # Aggregate by city
     agg_df = demographics.groupby(["City", "State", "State Code"]).agg(first_agg)
 
-    # Pivot Table to transform values of the column Race to different columns
+    # Pivot table to transform values of the column Race to different columns
     pivot_df = demographics.groupBy(["City", "State", "State Code"]).pivot("Race").sum("Count")
     
     # Rename column names removing the spaces to avoid problems when saving to disk (we got errors when trying to save column names with spaces)
     demographics = agg_df.join(other=pivot_df, on=["City", "State", "State Code"], how="inner")\
                         .withColumnRenamed('State Code', 'StateCode')\
+                        .withColumnRenamed('Hispanic or Latino', 'HispanicOrLatino')\
+                        .withColumnRenamed('Black or African-American', 'BlackOrAfricanAmerican')\
+                        .withColumnRenamed('American Indian and Alaska Native', 'AmericanIndianAndAlaskaNative') \
                         .withColumnRenamed('first(Total Population)', 'TotalPopulation')\
                         .withColumnRenamed('first(Female Population)', 'FemalePopulation')\
                         .withColumnRenamed('first(Male Population)', 'MalePopulation')\
                         .withColumnRenamed('first(Median Age)', 'MedianAge')\
                         .withColumnRenamed('first(Number of Veterans)', 'NumberVeterans')\
                         .withColumnRenamed('first(Foreign-born)', 'ForeignBorn')\
-                        .withColumnRenamed('first(Average Household Size)', 'AverageHouseholdSize')\
-                        .withColumnRenamed('Hispanic or Latino', 'HispanicOrLatino')\
-                        .withColumnRenamed('Black or African-American', 'BlackOrAfricanAmerican')\
-                        .withColumnRenamed('American Indian and Alaska Native', 'AmericanIndianAndAlaskaNative')
+                        .withColumnRenamed('first(Average Household Size)', 'AverageHouseholdSize')
 
     numeric_cols = [
                         'TotalPopulation', 
@@ -175,160 +218,157 @@ def process_immigration_data(spark, input_data, output_data):
                     'depdate'
                 ]
 
-    date_cols       = ['arrdate', 'depdate']
-    high_null       = ["visapost", "occup", "entdepu", "insnum"]
-    not_useful_cols = ["count", "entdepa", "entdepd", "matflag", "dtaddto", "biryear", "admnum"]
+    date_cols = ['arrdate', 'depdate']
 
     # Convert columns read as string/double to integer
     immigration = cast_type(immigration, dict(zip(int_cols, len(int_cols)*[IntegerType()])))
 
-     # Convert SAS date to a meaningful string date in the format of YYYY-MM-DD
+    # Convert SAS date to a meaningful string date in the format of YYYY-MM-DD
     immigration = convert_sas_date(immigration, date_cols)
     
     # Drop high null columns and not useful columns
-    immigration = immigration.drop(*high_null)
-    immigration = immigration.drop(*not_useful_cols)
+    high_null       = ["visapost", "occup", "entdepu", "insnum"]
+    not_useful_cols = ["count", "entdepa", "entdepd", "matflag", "dtaddto", "biryear", "admnum"]
+    immigration = immigration.drop(*high_null).drop(*not_useful_cols)
+
+    # Create a new columns to store the length of the visitor stay in the US
+    immigration = immigration.withColumn('stay', date_diff_udf(immigration.arrdate, immigration.depdate))
+    immigration = cast_type(immigration, {'stay': IntegerType()})
+
+    # immigration.write.mode("overwrite").parquet(output_data + '/datalake/immigration.parquet')
     
-    immigration.show(10)
+    # Read i94 immigration dataset to create Date Frame
+    i94_spark=spark.read.parquet("sas_data")
 
-# date_diff_udf = udf(date_diff)
+    i94_spark=i94_spark.select(col("i94res").cast(IntegerType()),col("i94port"),
+                               col("arrdate").cast(IntegerType()), \
+                               col("i94mode").cast(IntegerType()),col("depdate").cast(IntegerType()),
+                               col("i94bir").cast(IntegerType()),col("i94visa").cast(IntegerType()), 
+                               col("count").cast(IntegerType()), \
+                                  "gender",col("admnum").cast(LongType()))
 
-# # Create a new columns to store the length of the visitor stay in the US
-# immigration = immigration.withColumn('stay', date_diff_udf(immigration.arrdate, immigration.depdate))
-# immigration = cast_type(immigration, {'stay': IntegerType()})
+    # We will drop duplicate rows and save it as final dataset for i94
+    i94_spark=i94_spark.dropDuplicates()
 
-# immigration.write.mode("overwrite").parquet('s3a://ychang-output/datalake/immigration.parquet')
+    # Convert SAS arrival date to datetime format
+    get_date = udf(lambda x: (datetime.datetime(1960, 1, 1).date() + datetime.timedelta(x)).isoformat() if x else None)
+    i94non_immigrant_port_entry = i94_spark.withColumn("arrival_date", get_date(i94_spark.arrdate))
 
-@udf(DateType())
-def date_diff(date1, date2, date_format="%Y-%m-%d"):
-    '''
-    Description: This fucntion calculates the difference in days between two dates
+    from pyspark.sql import functions as F
+    i94date= i94non_immigrant_port_entry.withColumn('Darrival_date',F.to_date(i94non_immigrant_port_entry.arrival_date))
     
+    i94date = i94date.withColumn('arrival_month',month(i94date.Darrival_date)) \
+                     .withColumn('arrival_year',year(i94date.Darrival_date)) \
+                     .withColumn('arrival_day',dayofmonth(i94date.Darrival_date)) \
+                     .withColumn('day_of_week',dayofweek(i94date.Darrival_date)) \
+                     .withColumn('arrival_weekofyear',weekofyear(i94date.Darrival_date))
+
+    i94date = i94date.select(
+                            col('arrdate').alias('arrival_sasdate'),
+                            col('Darrival_date').alias('arrival_iso_date'),
+                            'arrival_month',
+                            'day_of_week',
+                            'arrival_year',
+                            'arrival_day',
+                            'arrival_weekofyear'
+                        ).dropDuplicates()
+
+    # Create temporary sql table
+    i94date.createOrReplaceTempView("i94date_table")
+
+    # Add seasons to i94 date dimension table
+    i94date_season=spark.sql('''
+                                SELECT
+                                    arrival_sasdate,
+                                    arrival_iso_date,
+                                    arrival_month,
+                                    day_of_week,
+                                    arrival_year,
+                                    arrival_day,
+                                    arrival_weekofyear,
+                                    CASE WHEN arrival_month IN (12, 1, 2) THEN 'winter' 
+                                         WHEN arrival_month IN (3, 4, 5) THEN 'spring' 
+                                         WHEN arrival_month IN (6, 7, 8) THEN 'summer' 
+                                         ELSE 'autumn' END AS date_season
+                                FROM i94date_table
+                             ''')
+    
+    # Save i94date dimension to parquet file partitioned by year and month:
+#     i94date_season.write.mode("overwrite").partitionBy("arrival_year", "arrival_month").parquet(output_data + 's3a://ychang-output/datalake/i94date.parquet')
+
+def process_countries_data(spark, input_data, output_data):
+    """
+    Description: This function loads immigration dataset locally and processes it by extracting the and then again loaded back to S3
+                    
     Parameters:
-            date1: First date
-            date2: Second date
-            date_format: Date format. default: %Y-%m-%d
-    '''
+            spark       : Spark Session
+            input_data  : location of demographics dataset
+            output_data : S3 bucket were dimensional tables in parquet format will be stored
+    """
     
-    if date1 is None or date2 is None:
-        return None
+    # If input_data is not set
+    if len(input_data) == 0:
+        input_data = "../../data2/GlobalLandTemperaturesByCity.csv"
+        
+    countries = spark.read.format('csv').options(header='true', inferSchema='true').load(input_data)
+
+    # Aggregates the dataset by Country and rename the name of new columns
+    countries = countries.groupby(["Country"]).agg({"AverageTemperature": "avg", "Latitude": "first", "Longitude": "first"})\
+                                                .withColumnRenamed('avg(AverageTemperature)', 'Temperature')\
+                                                .withColumnRenamed('first(Latitude)', 'Latitude')\
+                                                .withColumnRenamed('first(Longitude)', 'Longitude')
+
+
+
+    # Rename specific country names to match the I94CIT_I94RES lookup table when joining them
+    change_countries = [("Country", "Congo (Democratic Republic Of The)", "Congo"), ("Country", "Côte D'Ivoire", "Ivory Coast")]
+    countries = change_field_value_condition(countries, change_countries)
+    countries = countries.withColumn('CountryLower', lower(countries.Country))
+
+    # Rename specific country names to match the demographics dataset when joining them
+    change_res = [
+                    ("I94CTRY", "BOSNIA-HERZEGOVINA", "BOSNIA AND HERZEGOVINA"), 
+                    ("I94CTRY", "INVALID: CANADA", "CANADA"),
+                    ("I94CTRY", "CHINA, PRC", "CHINA"),
+                    ("I94CTRY", "GUINEA-BISSAU", "GUINEA BISSAU"),
+                    ("I94CTRY", "INVALID: PUERTO RICO", "PUERTO RICO"),
+                    ("I94CTRY", "INVALID: UNITED STATES", "UNITED STATES")
+                  ]
+
+    # Loads the lookup table I94CIT_I94RES
+    res = spark.read.format('csv').options(header='true', inferSchema='true').load("I94CIT_I94RES.csv")
+
+    res = cast_type(res, {"Code": IntegerType()})
+    res = change_field_value_condition(res, change_res)
+    res = res.withColumn('resCountry_Lower', lower(res.I94CTRY))
+
+    # Join the two datasets to create the country dimmension table
+    res = res.join(countries, res.resCountry_Lower == countries.CountryLower, how="left")
+    res = res.withColumn("Country", when(isnull(res["Country"]), capitalize_udf(res.I94CTRY)) \
+                    .otherwise(res["Country"])) \
+                    .drop("I94CTRY", "CountryLower", "resCountry_Lower")
+
+    # Create i94mode parquet file
+#     res.write.mode("overwrite").parquet(output_data + '/datalake/country.parquet')
+
+
+
+# def data_quality_check(df1, df2):
+#     """
+#     Description: Checks the data integrity between t
+                    
+#     Parameters:
+#             spark       : Spark Session
+#             input_data  : location of demographics dataset
+#             output_data : S3 bucket were dimensional tables in parquet format will be stored
+#     """
     
-    a = datetime.strptime(date1, date_format)
-    b = datetime.strptime(date2, date_format)
-    delta = b - a
-    return delta.days
+#     if df.count() > 0:
+#         print('Passed reading data file.')
+#     else:
+#         raise ValueError('Inconsistant data between both dataframes!')
 
-
-
-# # Start processing the I9I94_SAS_Labels_Description.SAS to create master i94 code dimensions:
-# # Create i94mode list
-# i94mode_data =[[1,'Air'],[2,'Sea'],[3,'Land'],[9,'Not reported']]
-
-# # Convert to spark dataframe
-# i94mode=spark.createDataFrame(i94mode_data)
-
-# # Create i94mode parquet file
-# i94mode.write.mode("overwrite").parquet('s3a://ychang-output/datalake/i94mode.parquet')
-
-# countries = spark.read.format('csv').options(header='true', inferSchema='true').load("../../data2/GlobalLandTemperaturesByCity.csv")
-
-# # Aggregates the dataset by Country and rename the name of new columns
-# countries = countries.groupby(["Country"]).agg({"AverageTemperature": "avg", "Latitude": "first", "Longitude": "first"})\
-# .withColumnRenamed('avg(AverageTemperature)', 'Temperature')\
-# .withColumnRenamed('first(Latitude)', 'Latitude')\
-# .withColumnRenamed('first(Longitude)', 'Longitude')
-
-# def change_field_value_condition(df, change_list):
-#     '''
-#     Helper function used to rename column values based on condition.
-    
-#     Args:
-#         df (:obj:`SparkDataFrame`): Spark dataframe to be processed.
-#         change_list (:obj: `list`): List of tuples in the format (field, old value, new value)
-#     '''
-#     for field, old, new in change_list:
-#         df = df.withColumn(field, when(df[field] == old, new).otherwise(df[field]))
-#     return df
-
-# # Rename specific country names to match the I94CIT_I94RES lookup table when joining them
-# change_countries = [("Country", "Congo (Democratic Republic Of The)", "Congo"), ("Country", "Côte D'Ivoire", "Ivory Coast")]
-# countries = change_field_value_condition(countries, change_countries)
-# countries = countries.withColumn('CountryLower', lower(countries.Country))
-
-# # Rename specific country names to match the demographics dataset when joining them
-# change_res = [("I94CTRY", "BOSNIA-HERZEGOVINA", "BOSNIA AND HERZEGOVINA"), 
-#                   ("I94CTRY", "INVALID: CANADA", "CANADA"),
-#                   ("I94CTRY", "CHINA, PRC", "CHINA"),
-#                   ("I94CTRY", "GUINEA-BISSAU", "GUINEA BISSAU"),
-#                   ("I94CTRY", "INVALID: PUERTO RICO", "PUERTO RICO"),
-#                   ("I94CTRY", "INVALID: UNITED STATES", "UNITED STATES")]
-
-# # Loads the lookup table I94CIT_I94RES
-# res = spark.read.format('csv').options(header='true', inferSchema='true').load("I94CIT_I94RES.csv")
-
-# res = cast_type(res, {"Code": IntegerType()})
-# res = change_field_value_condition(res, change_res)
-# res = res.withColumn('resCountry_Lower', lower(res.I94CTRY))
-
-# capitalize_udf = udf(lambda x: x if x is None else x.title())
-
-# # Join the two datasets to create the country dimmension table
-# res = res.join(countries, res.resCountry_Lower == countries.CountryLower, how="left")
-# res = res.withColumn("Country", when(isnull(res["Country"]), capitalize_udf(res.I94CTRY)).otherwise(res["Country"]))   
-# res = res.drop("I94CTRY", "CountryLower")
-# res = res.drop("resCountry_Lower")
-
-# # Create i94mode parquet file
-# res.write.mode("overwrite").parquet('s3a://ychang-output/datalake/country.parquet')
-
-# # Read i94 immigration dataset to create Date Frame
-# i94_spark=spark.read.parquet("sas_data")
-
-# i94_spark=i94_spark.select(col("i94res").cast(IntegerType()),col("i94port"),
-#                            col("arrdate").cast(IntegerType()), \
-#                            col("i94mode").cast(IntegerType()),col("depdate").cast(IntegerType()),
-#                            col("i94bir").cast(IntegerType()),col("i94visa").cast(IntegerType()), 
-#                            col("count").cast(IntegerType()), \
-#                               "gender",col("admnum").cast(LongType()))
-
-# # We will drop duplicate rows and save it as final dataset for i94
-# i94_spark=i94_spark.dropDuplicates()
-
-# import datetime as dt
-# # Convert SAS arrival date to datetime format
-# get_date = udf(lambda x: (dt.datetime(1960, 1, 1).date() + dt.timedelta(x)).isoformat() if x else None)
-# i94non_immigrant_port_entry = i94_spark.withColumn("arrival_date", get_date(i94_spark.arrdate))
-
-# from pyspark.sql import functions as F
-# i94date= i94non_immigrant_port_entry.withColumn('Darrival_date',F.to_date(i94non_immigrant_port_entry.arrival_date))
-# i94date = i94date.withColumn('arrival_month',month(i94date.Darrival_date))
-# i94date = i94date.withColumn('arrival_year',year(i94date.Darrival_date))
-# i94date = i94date.withColumn('arrival_day',dayofmonth(i94date.Darrival_date))
-# i94date = i94date.withColumn('day_of_week',dayofweek(i94date.Darrival_date))
-# i94date = i94date.withColumn('arrival_weekofyear',weekofyear(i94date.Darrival_date))
-
-# i94date=i94date.select(col('arrdate').alias('arrival_sasdate'),col('Darrival_date').alias('arrival_iso_date'), 'arrival_month','day_of_week','arrival_year','arrival_day','arrival_weekofyear').dropDuplicates()
-
-# # Create temporary sql table
-# i94date.createOrReplaceTempView("i94date_table")
-
-# # Add seasons to i94 date dimension table
-# i94date_season=spark.sql('''
-#                             SELECT
-#                                 arrival_sasdate,
-#                                 arrival_iso_date,
-#                                 arrival_month,
-#                                 day_of_week,
-#                                 arrival_year,
-#                                 arrival_day,
-#                                 arrival_weekofyear,
-#                                 CASE WHEN arrival_month IN (12, 1, 2) THEN 'winter' 
-#                                      WHEN arrival_month IN (3, 4, 5) THEN 'spring' 
-#                                      WHEN arrival_month IN (6, 7, 8) THEN 'summer' 
-#                                      ELSE 'autumn' END AS date_season
-#                             FROM i94date_table
-#                          ''')
-
+        
 # # Perform quality checks here
 # if i94date_season.count() > 0:
 #     print('Passed reading data file.')
@@ -345,8 +385,7 @@ def date_diff(date1, date2, date_format="%Y-%m-%d"):
 # else:
 #     raise ValueError('Inconsistant data between both dataframes!')
 
-# # Save i94date dimension to parquet file partitioned by year and month:
-# i94date_season.write.mode("overwrite").partitionBy("arrival_year", "arrival_month").parquet('s3a://ychang-output/datalake/i94date.parquet')
+
 
 
 def main():
@@ -354,13 +393,11 @@ def main():
     Extract immigration, demographics, country, mode of transport and arrival data from S3, Transform it into dimensional tables format, and Load it back to S3 in Parquet format
     """
     spark = create_spark_session()
-    spark = create_spark_session()
     
     ## Input and output paths
     output_data = "s3a://ychang-output/"
     input_data  = ""
     
-#     print(date_diff('2020-01-01', '2020-02-01'))
     process_demographics_data(spark, input_data, output_data)
     process_immigration_data(spark, input_data, output_data)
 
