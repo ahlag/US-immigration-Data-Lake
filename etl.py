@@ -218,7 +218,7 @@ def process_demographics_data(spark, input_data, output_data):
     quality_checks(demographics, 'DEMOGRAPHICS')
 
     # Write and transform demographics dataset into a parquet file
-#     demographics.write.mode('overwrite').parquet(output_data + "/datalake/us_cities_demographics.parquet")
+    demographics.write.mode('overwrite').parquet(output_data + "/datalake/us_cities_demographics.parquet")
     
 
 def process_immigration_data(spark, input_data, output_data):
@@ -270,7 +270,7 @@ def process_immigration_data(spark, input_data, output_data):
     # Data quality check
     quality_checks(immigration, 'IMMIGRATION')
 
-    # immigration.write.mode("overwrite").parquet(output_data + '/datalake/immigration.parquet')
+    immigration.write.mode("overwrite").parquet(output_data + '/datalake/immigration.parquet')
     
     # Load i94 immigration dataset to Dateframe
     i94_spark = spark.read.parquet("sas_data")
@@ -331,8 +331,9 @@ def process_immigration_data(spark, input_data, output_data):
     
     # Data quality check
     quality_checks(arrival_date_season, 'ARRIVALDATE')
+    
     # Save arrival_date dimension to parquet file partitioned by year and month:
-#     arrival_date_season.write.mode("overwrite").partitionBy("arrival_year", "arrival_month").parquet(output_data + 's3a://ychang-output/datalake/arrival_date.parquet')
+    arrival_date_season.write.mode("overwrite").partitionBy("arrival_year", "arrival_month").parquet(output_data + 's3a://ychang-output/datalake/arrival_date.parquet')
 
 def process_countries_data(spark, input_data, output_data):
     """
@@ -392,7 +393,7 @@ def process_countries_data(spark, input_data, output_data):
     # Data quality check
     quality_checks(res, 'COUNTRIES')
     # Create i94mode parquet file
-#     res.write.mode("overwrite").parquet(output_data + '/datalake/country.parquet')
+    res.write.mode("overwrite").parquet(output_data + '/datalake/country.parquet')
 
 def main():
     """
