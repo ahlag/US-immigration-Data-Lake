@@ -2,3 +2,5 @@ dl.cfg
 .ipynb_checkpoints/*
 *.log
 *.parquet
+images/.ipynb_checkpoints/*
+images/.ipynb_checkpoints
