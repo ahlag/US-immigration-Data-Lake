@@ -50,7 +50,7 @@ A sample of Spark architecture
 
 ### Structure of the Project
 
-The project follows the follow steps:
+The project follows the following steps:
 * Step 1: Scope the Project and Gather Data
 * Step 2: Explore and Assess the Data
 * Step 3: Define the Data Model
@@ -59,7 +59,6 @@ The project follows the follow steps:
 
 ### Notebook
 Please check the [US_Immigration_Data_Lake.ipynb](US_Immigration_Data_Lake.ipynb) for the project workflow.
-
 
 ### Configuration
 Set up a config file dl.cfg that uses the following schema. Put in the information for your IAM-Role that can read and write S3 buckets.
@@ -74,4 +73,4 @@ Simply run the ETL script.
 ```
 python etl.py
 ```
-If the ETL pipeline was successful, a preview of the output data will be displayed.
+If the ETL pipeline was successful, there will be parquet files written in S3 buckets.

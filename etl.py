@@ -6,6 +6,7 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import udf, col, when, lower, isnull, year, month, dayofmonth, hour, weekofyear, dayofweek, date_format, to_date
 from pyspark.sql.types import IntegerType, DoubleType, LongType, DateType, StringType
 
+## Environment variable settings for Spark
 os.environ["JAVA_HOME"] = "/usr/lib/jvm/java-8-openjdk-amd64"
 os.environ["PATH"] = "/opt/conda/bin:/opt/spark-2.4.3-bin-hadoop2.7/bin:/opt/conda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/lib/jvm/java-8-openjdk-amd64/bin"
 os.environ["SPARK_HOME"] = "/opt/spark-2.4.3-bin-hadoop2.7"
@@ -15,7 +16,7 @@ os.environ["HADOOP_HOME"] = "/opt/spark-2.4.3-bin-hadoop2.7"
 config = configparser.ConfigParser()
 config.read('dl.cfg')
 
-# Reads and saves the AWS access key information and saves them in a environment variable
+# Read and save the AWS access key information and saves them in an environment variable
 os.environ['AWS_ACCESS_KEY_ID']=config['KEYS']['AWS_ACCESS_KEY_ID']
 os.environ['AWS_SECRET_ACCESS_KEY']=config['KEYS']['AWS_SECRET_ACCESS_KEY']
 
@@ -159,7 +160,7 @@ def process_demographics_data(spark, input_data, output_data):
     # Read US Cities Demo dataset file
     demographics = spark.read.csv(input_data, sep=';', header=True)
     
-    # Convert numeric columns to the proper types: Integer and Double
+    # Convert numeric columns to Integer and Double
     int_cols     = ['Count', 'Male Population', 'Female Population', 'Total Population', 'Number of Veterans', 'Foreign-born']
     float_cols   = ['Median Age', 'Average Household Size']
     demographics = cast_type(demographics, dict(zip(int_cols, len(int_cols)*[IntegerType()])))
@@ -274,12 +275,15 @@ def process_immigration_data(spark, input_data, output_data):
     # Load i94 immigration dataset to Dateframe
     i94_spark = spark.read.parquet("sas_data")
 
-    i94_spark = i94_spark.select(col("i94res").cast(IntegerType()),col("i94port"),
-                               col("arrdate").cast(IntegerType()), \
-                               col("i94mode").cast(IntegerType()),col("depdate").cast(IntegerType()),
-                               col("i94bir").cast(IntegerType()),col("i94visa").cast(IntegerType()), 
-                               col("count").cast(IntegerType()), \
-                                  "gender",col("admnum").cast(LongType()))
+    i94_spark = i94_spark.select(
+                                    col("i94res").cast(IntegerType()),col("i94port"),
+                                    col("arrdate").cast(IntegerType()), \
+                                    col("i94mode").cast(IntegerType()),col("depdate").cast(IntegerType()),
+                                    col("i94bir").cast(IntegerType()),col("i94visa").cast(IntegerType()), 
+                                    col("count").cast(IntegerType()), \
+                                    "gender",
+                                    col("admnum").cast(LongType())
+                                )
 
     # Drop duplicate rows
     i94_spark = i94_spark.dropDuplicates()
@@ -287,15 +291,15 @@ def process_immigration_data(spark, input_data, output_data):
     # Convert SAS arrival date to datetime format
     i94non_immigrant_port_entry = i94_spark.withColumn("arrival_date", get_date_udf(i94_spark.arrdate))
 
-    i94date= i94non_immigrant_port_entry.withColumn('Darrival_date',to_date(i94non_immigrant_port_entry.arrival_date))
+    arrival_date= i94non_immigrant_port_entry.withColumn('Darrival_date',to_date(i94non_immigrant_port_entry.arrival_date))
     
-    i94date = i94date.withColumn('arrival_month',month(i94date.Darrival_date)) \
-                     .withColumn('arrival_year',year(i94date.Darrival_date)) \
-                     .withColumn('arrival_day',dayofmonth(i94date.Darrival_date)) \
-                     .withColumn('day_of_week',dayofweek(i94date.Darrival_date)) \
-                     .withColumn('arrival_weekofyear',weekofyear(i94date.Darrival_date))
+    arrival_date = arrival_date.withColumn('arrival_month',month(arrival_date.Darrival_date)) \
+                     .withColumn('arrival_year',year(arrival_date.Darrival_date)) \
+                     .withColumn('arrival_day',dayofmonth(arrival_date.Darrival_date)) \
+                     .withColumn('day_of_week',dayofweek(arrival_date.Darrival_date)) \
+                     .withColumn('arrival_weekofyear',weekofyear(arrival_date.Darrival_date))
 
-    i94date = i94date.select(
+    arrival_date = arrival_date.select(
                             col('arrdate').alias('arrival_sasdate'),
                             col('Darrival_date').alias('arrival_iso_date'),
                             'arrival_month',
@@ -306,10 +310,10 @@ def process_immigration_data(spark, input_data, output_data):
                         ).dropDuplicates()
 
     # Create a temporary sql table
-    i94date.createOrReplaceTempView("i94date")
+    arrival_date.createOrReplaceTempView("arrival_date")
 
     # Add seasons to i94 date dimension table
-    i94date_season = spark.sql('''
+    arrival_date_season = spark.sql('''
                                 SELECT
                                     arrival_sasdate,
                                     arrival_iso_date,
@@ -322,13 +326,13 @@ def process_immigration_data(spark, input_data, output_data):
                                          WHEN arrival_month IN (3, 4, 5) THEN 'spring' 
                                          WHEN arrival_month IN (6, 7, 8) THEN 'summer' 
                                          ELSE 'autumn' END AS date_season
-                                FROM i94date
+                                FROM arrival_date
                              ''')
     
     # Data quality check
-    quality_checks(i94date_season, 'I94DATE')
-    # Save i94date dimension to parquet file partitioned by year and month:
-#     i94date_season.write.mode("overwrite").partitionBy("arrival_year", "arrival_month").parquet(output_data + 's3a://ychang-output/datalake/i94date.parquet')
+    quality_checks(arrival_date_season, 'ARRIVALDATE')
+    # Save arrival_date dimension to parquet file partitioned by year and month:
+#     arrival_date_season.write.mode("overwrite").partitionBy("arrival_year", "arrival_month").parquet(output_data + 's3a://ychang-output/datalake/arrival_date.parquet')
 
 def process_countries_data(spark, input_data, output_data):
     """
